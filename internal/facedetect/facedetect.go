@@ -3,40 +3,79 @@ package facedetect
 import (
 	"fmt"
 	"gocv.io/x/gocv"
+	"image"
 	"image/color"
+	"os"
+	"path/filepath"
 )
 
-func Some() {
-	img := gocv.IMRead("/path/to/your/photo.jpg", gocv.IMReadColor)
+func DetectFaces(inputPath, outputDir string) error {
+	// Read the input image
+	img := gocv.IMRead(inputPath, gocv.IMReadColor)
 	if img.Empty() {
-		fmt.Println("Error reading image")
-		return
+		return fmt.Errorf("ошибка при чтении изображения")
 	}
 	defer img.Close()
 
-	classifier := gocv.NewCascadeClassifier()
-	defer classifier.Close()
-	if !classifier.Load("/home/anwarzadeh/Desktop/face-detection/cmd/haarcascade_frontalface_default.xml") {
-		fmt.Println("Error loading cascade classifier.")
-		return
+	// Load the pre-trained DNN face detection model
+	net := gocv.ReadNet(
+		"/home/anwarzadeh/Desktop/face-detection/cmd/res10_300x300_ssd_iter_140000.caffemodel",
+		"/home/anwarzadeh/Desktop/face-detection/cmd/deploy.prototxt",
+	)
+
+	net.SetPreferableBackend(gocv.NetBackendDefault)
+	net.SetPreferableTarget(gocv.NetTargetCPU)
+
+	if net.Empty() {
+		return fmt.Errorf("ошибка при загрузке DNN модели")
+	}
+	defer net.Close()
+
+	blob := gocv.BlobFromImage(img, 1.0, image.Point{300, 300}, gocv.NewScalar(104, 177, 123, 0), false, false)
+	defer blob.Close()
+
+	net.SetInput(blob, "")
+	detections := net.Forward("")
+
+	if detections.Empty() {
+		return fmt.Errorf("не удалось получить детекции")
 	}
 
-	gray := gocv.NewMat()
-	defer gray.Close()
-	gocv.CvtColor(img, &gray, gocv.ColorBGRToGray)
+	detectionMat := detections.Reshape(1, detections.Total()/7)
 
-	faces := classifier.DetectMultiScale(gray)
-	if len(faces) == 0 {
-		fmt.Println("No faces detected")
-	} else {
+	numDetections := detectionMat.Rows()
 
-		for _, face := range faces {
-			gocv.Rectangle(&img, face, color.RGBA{0, 255, 0, 0}, 2)
+	fmt.Printf("Number of detections: %d\n", numDetections)
+
+	for i := 0; i < numDetections; i++ {
+		confidence := detectionMat.GetFloatAt(i, 2)
+
+		fmt.Printf("Detection %d, Confidence: %f, Coordinates: (%f, %f, %f, %f)\n",
+			i, confidence, detectionMat.GetFloatAt(i, 3), detectionMat.GetFloatAt(i, 4),
+			detectionMat.GetFloatAt(i, 5), detectionMat.GetFloatAt(i, 6))
+
+		if confidence > 0.5 {
+
+			left := int(detectionMat.GetFloatAt(i, 3) * float32(img.Cols()))
+			top := int(detectionMat.GetFloatAt(i, 4) * float32(img.Rows()))
+			right := int(detectionMat.GetFloatAt(i, 5) * float32(img.Cols()))
+			bottom := int(detectionMat.GetFloatAt(i, 6) * float32(img.Rows()))
+
+			rect := image.Rect(left, top, right, bottom)
+			gocv.Rectangle(&img, rect, color.RGBA{0, 255, 0, 0}, 2)
 		}
 	}
 
-	window := gocv.NewWindow("Face Detection")
-	defer window.Close()
-	window.IMShow(img)
-	window.WaitKey(0)
+	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
+		return fmt.Errorf("не удалось создать директорию: %v", err)
+	}
+
+	// Save the image with the detected faces to the output directory
+	outputPath := filepath.Join(outputDir, "detected_"+filepath.Base(inputPath))
+	if ok := gocv.IMWrite(outputPath, img); !ok {
+		return fmt.Errorf("не удалось сохранить изображение")
+	}
+	fmt.Printf("Фото с лицами сохранено в %s\n", outputPath)
+
+	return nil
 }
