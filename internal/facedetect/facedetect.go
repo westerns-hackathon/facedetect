@@ -34,7 +34,6 @@ func DetectFaces(inputPath, outputDir string) error {
 		return fmt.Errorf("ошибка при загрузке DNN модели")
 	}
 
-	// Подготовка BLOB для сети
 	blob := gocv.BlobFromImage(img, 1.0, image.Point{300, 300}, gocv.NewScalar(104, 177, 123, 0), false, false)
 	defer blob.Close()
 	net.SetInput(blob, "")
@@ -44,7 +43,6 @@ func DetectFaces(inputPath, outputDir string) error {
 		return fmt.Errorf("не удалось получить детекции")
 	}
 
-	// Парсим результаты обнаружения
 	detectionMat := detections.Reshape(1, detections.Total()/7)
 	numDetections := detectionMat.Rows()
 
@@ -75,7 +73,6 @@ func DetectFaces(inputPath, outputDir string) error {
 	return nil
 }
 
-// MatchFaces — функция для сравнения лиц и возврата информации о схожести
 func MatchFaces(firstImage, secondImage string) (string, error) {
 
 	rec, err := face.NewRecognizer(modelsDir)
