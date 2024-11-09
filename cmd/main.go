@@ -18,7 +18,7 @@ func main() {
 		log.Fatalf("failed to open database: %v", err)
 	}
 
-	recognizer, err := face.NewRecognizer("/home/anwarzadeh/Desktop/face-detection/internal/facedetect/models")
+	recognizer, err := face.NewRecognizer("internal/facedetect/models")
 	if err != nil {
 		log.Fatalf("Ошибка при инициализации recognizer: %v", err)
 	}

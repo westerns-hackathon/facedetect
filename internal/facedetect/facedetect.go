@@ -14,7 +14,21 @@ import (
 	"path/filepath"
 )
 
-const modelsDir = "/home/anwarzadeh/Desktop/face-detection/internal/facedetect/models"
+const modelsDir = "face-detection/internal/facedetect/models"
+
+func getModelPaths() (string, string) {
+	// Получаем путь к текущей рабочей директории (откуда запускается программа)
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	// Строим путь к моделям относительно рабочей директории
+	modelPath := filepath.Join(cwd, "cmd", "res10_300x300_ssd_iter_140000.caffemodel")
+	prototxtPath := filepath.Join(cwd, "cmd", "deploy.prototxt")
+
+	return modelPath, prototxtPath
+}
 
 // DetectFaces — функция для обнаружения лиц и сохранения обработанного изображения
 func DetectFaces(inputPath, outputDir string) error {
@@ -24,10 +38,10 @@ func DetectFaces(inputPath, outputDir string) error {
 	}
 	defer img.Close()
 
-	net := gocv.ReadNet(
-		"/home/anwarzadeh/Desktop/face-detection/cmd/res10_300x300_ssd_iter_140000.caffemodel",
-		"/home/anwarzadeh/Desktop/face-detection/cmd/deploy.prototxt",
-	)
+	modelPath, prototxtPath := getModelPaths()
+
+	net := gocv.ReadNet(modelPath, prototxtPath)
+
 	defer net.Close()
 
 	if net.Empty() {
@@ -54,7 +68,6 @@ func DetectFaces(inputPath, outputDir string) error {
 			right := int(detectionMat.GetFloatAt(i, 5) * float32(img.Cols()))
 			bottom := int(detectionMat.GetFloatAt(i, 6) * float32(img.Rows()))
 
-			// Отмечаем лицо на изображении
 			rect := image.Rect(left, top, right, bottom)
 			gocv.Rectangle(&img, rect, color.RGBA{21, 104, 100, 0}, 1)
 			gocv.PutText(&img, fmt.Sprintf("Confidence: %.2f", confidence), image.Pt(left, top-10),
@@ -172,13 +185,10 @@ func FindMatchingFaces(descriptor []float32, db db.Storage) ([]model.Face, error
 
 	var matchingFaces []model.Face
 	for _, face := range faces {
-		// Сравниваем дескриптор с каждым лицом в базе данных
 		similarity := CosineSimilarity(descriptor, face.Descriptor)
-		// Если схожесть выше порогового значения, добавляем лицо в результаты
-		if similarity > 0.8 { // Пороговое значение можно настроить
+		if similarity > 0.8 {
 			matchingFaces = append(matchingFaces, face)
 		}
 	}
-
 	return matchingFaces, nil
 }
