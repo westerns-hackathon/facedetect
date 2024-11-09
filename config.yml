@@ -1,6 +1,6 @@
 host: localhost
 port: 8080
 database:
-  username:
-  password:
-  dbname:
+  username: faceid
+  password: faceid
+  dbname: facedetect

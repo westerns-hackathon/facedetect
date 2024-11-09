@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq" // Импортируем PostgreSQL драйвер
+	_ "github.com/lib/pq"
 )
 
 type Database struct {
@@ -20,10 +20,9 @@ func NewDB(cfg *config.Config) *Database {
 
 func (d *Database) Open() error {
 	dsn := fmt.Sprintf(
-		"user=%s dbname=%s sslmode=disable password=%s host=%s port=5432",
+		"user=%s dbname=%s sslmode=disable password=%s host=localhost port=5432",
 		d.cfg.Database.Username, d.cfg.Database.DBName, d.cfg.Database.Password,
 	)
-
 	db, err := sqlx.Connect("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
