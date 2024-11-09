@@ -18,12 +18,31 @@ func NewServer(h *Handler) *Server {
 
 func (s *Server) Run(host, port string) error {
 	mux := http.NewServeMux()
-	log.Printf("server in running on %s:%s", host, port)
-	mux.HandleFunc("POST /v1/app/photo", s.h.PostPhotoHandler)
-	mux.HandleFunc("POST /v1/app/photo/match", s.h.PostFaceMatchHandler)
-	mux.HandleFunc("POST /v1/app/photo/find", s.h.PostFindMatchingFacesHandler)
-	if err := http.ListenAndServe(fmt.Sprintf("%s:%s", host, port), mux); err != nil {
+
+	mux.HandleFunc("/v1/app/photo", s.h.PostPhotoHandler)
+	mux.HandleFunc("/v1/app/photo/match", s.h.PostFaceMatchHandler)
+	mux.HandleFunc("/v1/app/photo/find", s.h.PostFindMatchingFacesHandler)
+
+	handler := enableCORS(mux)
+
+	log.Printf("server is running on %s:%s", host, port)
+	if err := http.ListenAndServe(fmt.Sprintf("%s:%s", host, port), handler); err != nil {
 		return err
 	}
 	return nil
+}
+
+func enableCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")                   // Разрешить всем доменам
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS") // Разрешить нужные методы
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
