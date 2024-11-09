@@ -23,7 +23,6 @@ type Handler struct {
 func NewHandler(data *face.Recognizer, storage db.Storage) *Handler {
 	return &Handler{data, storage}
 }
-
 func (h *Handler) PostPhotoHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB
 		http.Error(w, "Не удалось распарсить форму", http.StatusBadRequest)
@@ -54,29 +53,35 @@ func (h *Handler) PostPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Путь к загруженному изображению для распознавания лиц: %s\n", inputPath)
 
-	faceDescriptors, err := facedetect.GetFaceDescriptors(inputPath)
-	if err != nil {
-		log.Printf("Ошибка при извлечении дескрипторов лиц: %v\n", err)
-		http.Error(w, "Ошибка при извлечении дескрипторов лиц", http.StatusInternalServerError)
+	// Обработка лиц
+	outputDir := "storage/detected_photo"
+	if err := facedetect.DetectFaces(inputPath, outputDir); err != nil {
+		http.Error(w, "Ошибка при обработке изображения", http.StatusInternalServerError)
 		return
 	}
 
-	for _, descriptor := range faceDescriptors {
-		face := model.Face{
-			Metadata:   []string{"metadata for the face"},
-			Descriptor: descriptor,
-			PhotoPath:  inputPath,
-		}
-
-		err := h.storage.AddFace(face)
-		if err != nil {
-			log.Printf("Ошибка при сохранении лица в базу данных: %v\n", err)
-			http.Error(w, fmt.Sprintf("Ошибка при сохранении лица в базу данных: %v", err), http.StatusInternalServerError)
-			return
-		}
+	// Проверка существования обработанного файла
+	outputPath := filepath.Join(outputDir, "detected_"+fileName)
+	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
+		http.Error(w, "Обработанный файл не найден", http.StatusInternalServerError)
+		return
 	}
-	err = facedetect.DetectFaces(inputPath, "storage/detected_photo")
-	fmt.Fprintf(w, "Фото успешно загружено, обработано и добавлено в базу данных!")
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"processed_%s\"", fileName))
+
+	processedFile, err := os.Open(outputPath)
+	if err != nil {
+		http.Error(w, "Ошибка при открытии обработанного изображения", http.StatusInternalServerError)
+		return
+	}
+	defer processedFile.Close()
+
+	_, err = io.Copy(w, processedFile)
+	if err != nil {
+		http.Error(w, "Ошибка при отправке изображения", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (h *Handler) PostFaceMatchHandler(w http.ResponseWriter, r *http.Request) {
