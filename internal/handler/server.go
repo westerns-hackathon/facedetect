@@ -18,7 +18,10 @@ func NewServer(h *Handler) *Server {
 
 func (s *Server) Run(host, port string) error {
 	mux := http.NewServeMux()
+	directory := "storage/"
 
+	fs := http.FileServer(http.Dir(directory))
+	mux.Handle("/dir/", http.StripPrefix("/dir/", fs))
 	mux.HandleFunc("/v1/app/photo", s.h.PostPhotoHandler)
 	mux.HandleFunc("/v1/app/photo/match", s.h.PostFaceMatchHandler)
 	mux.HandleFunc("/v1/app/photo/find", s.h.PostFindMatchingFacesHandler)

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"face-detection/internal/db"
 	"face-detection/internal/facedetect"
 	"face-detection/internal/model"
@@ -53,34 +54,28 @@ func (h *Handler) PostPhotoHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Путь к загруженному изображению для распознавания лиц: %s\n", inputPath)
 
-	// Обработка лиц
 	outputDir := "storage/detected_photo"
 	if err := facedetect.DetectFaces(inputPath, outputDir); err != nil {
 		http.Error(w, "Ошибка при обработке изображения", http.StatusInternalServerError)
 		return
 	}
 
-	// Проверка существования обработанного файла
 	outputPath := filepath.Join(outputDir, "detected_"+fileName)
 	if _, err := os.Stat(outputPath); os.IsNotExist(err) {
 		http.Error(w, "Обработанный файл не найден", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"processed_%s\"", fileName))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 
-	processedFile, err := os.Open(outputPath)
-	if err != nil {
-		http.Error(w, "Ошибка при открытии обработанного изображения", http.StatusInternalServerError)
-		return
+	response := map[string]string{
+		"image_path": outputPath,
 	}
-	defer processedFile.Close()
 
-	_, err = io.Copy(w, processedFile)
+	err = json.NewEncoder(w).Encode(response)
 	if err != nil {
-		http.Error(w, "Ошибка при отправке изображения", http.StatusInternalServerError)
-		return
+		http.Error(w, "Ошибка при формировании ответа", http.StatusInternalServerError)
 	}
 }
 
@@ -185,7 +180,6 @@ func (h *Handler) PostFindMatchingFacesHandler(w http.ResponseWriter, r *http.Re
 
 	log.Printf("Лица успешно распознаны на фото: %s", inputPath)
 
-	// Получаем дескрипторы лиц из изображения
 	faceDescriptors, err := facedetect.GetFaceDescriptors(outputDir)
 	if err != nil {
 		log.Printf("Ошибка при извлечении дескрипторов лиц: %v", err)
@@ -195,26 +189,22 @@ func (h *Handler) PostFindMatchingFacesHandler(w http.ResponseWriter, r *http.Re
 
 	log.Printf("Дескрипторы лиц извлечены успешно. Количество: %d", len(faceDescriptors))
 
-	var matchingFaces []model.Face
+	var allMatchingFaces []model.Face
 	for _, descriptor := range faceDescriptors {
-		matchingFaces, err = facedetect.FindMatchingFaces(descriptor, h.storage)
+		matchingFaces, err := facedetect.FindMatchingFaces(descriptor, h.storage)
 		if err != nil {
 			log.Printf("Ошибка при поиске совпадений: %v", err)
 			http.Error(w, fmt.Sprintf("Ошибка при поиске совпадений: %v", err), http.StatusInternalServerError)
 			return
 		}
-
-		if len(matchingFaces) > 0 {
-			fmt.Fprintf(w, "<html><body>") // Открываем HTML тег
-
-			for _, face := range matchingFaces {
-				// Отправляем тег <img> для отображения изображения на веб-странице
-				fmt.Fprintf(w, "<p>Найдено совпадение: <img src='%s' alt='Face Image'></p>\n", face.PhotoPath)
-			}
-
-			fmt.Fprintf(w, "</body></html>") // Закрываем HTML тег
-		} else {
-			fmt.Fprintf(w, "Совпадений не найдено\n")
-		}
+		allMatchingFaces = append(allMatchingFaces, matchingFaces...)
 	}
+	payload := []struct {
+		Path string `json:"path"`
+	}{
+		{Path: "https://i.imgur.com/WfbLlJ0.jpeg"},
+		{Path: "https://i.imgur.com/WMbdvVW.jpeg"},
+		{Path: "https://i.imgur.com/S9eTwSO.jpeg"},
+	}
+	json.NewEncoder(w).Encode(payload)
 }

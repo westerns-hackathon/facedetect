@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"face-detection/internal/model"
 	"fmt"
+	"log"
 )
 
 type Storage interface {
@@ -14,7 +15,6 @@ type Storage interface {
 }
 
 func (d *Database) AddFace(face model.Face) error {
-	// Преобразуем metadata в JSON
 	metadataJSON, err := json.Marshal(face.Metadata)
 	if err != nil {
 		return fmt.Errorf("не удалось преобразовать metadata в JSON: %v", err)
@@ -49,6 +49,7 @@ func (d *Database) GetAllFaces() ([]model.Face, error) {
 		var face model.Face
 		var metadataBytes []byte
 		var descriptorBytes []byte
+
 		if err := rows.Scan(&face.ID, &metadataBytes, &descriptorBytes, &face.PhotoPath); err != nil {
 			return nil, fmt.Errorf("ошибка при сканировании строки: %v", err)
 		}
@@ -61,6 +62,8 @@ func (d *Database) GetAllFaces() ([]model.Face, error) {
 			return nil, fmt.Errorf("не удалось десериализовать дескриптор: %v", err)
 		}
 
+		log.Printf("ID: %d, Длина дескриптора: %d", face.ID, len(face.Descriptor))
+
 		faces = append(faces, face)
 	}
 
@@ -72,12 +75,12 @@ func (d *Database) GetAllFaces() ([]model.Face, error) {
 }
 
 func deserializeDescriptor(data []byte, descriptor *[]float32) error {
-
 	decoder := gob.NewDecoder(bytes.NewReader(data))
-
 	if err := decoder.Decode(descriptor); err != nil {
 		return fmt.Errorf("не удалось десериализовать дескриптор: %v", err)
 	}
+
+	log.Printf("Дескриптор успешно десериализован, длина: %d", len(*descriptor))
 
 	return nil
 }

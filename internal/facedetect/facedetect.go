@@ -14,23 +14,21 @@ import (
 	"path/filepath"
 )
 
-const modelsDir = "face-detection/internal/facedetect/models"
+const modelsDir = "internal/facedetect/models"
 
 func getModelPaths() (string, string) {
-	// Получаем путь к текущей рабочей директории (откуда запускается программа)
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic(err)
 	}
 
-	// Строим путь к моделям относительно рабочей директории
 	modelPath := filepath.Join(cwd, "cmd", "res10_300x300_ssd_iter_140000.caffemodel")
 	prototxtPath := filepath.Join(cwd, "cmd", "deploy.prototxt")
 
 	return modelPath, prototxtPath
 }
 
-// DetectFaces — функция для обнаружения лиц и сохранения обработанного изображения
 func DetectFaces(inputPath, outputDir string) error {
 	img := gocv.IMRead(inputPath, gocv.IMReadColor)
 	if img.Empty() {
@@ -62,16 +60,19 @@ func DetectFaces(inputPath, outputDir string) error {
 
 	for i := 0; i < numDetections; i++ {
 		confidence := detectionMat.GetFloatAt(i, 2)
-		if confidence > 0.5 {
+		if confidence > 0.8 {
 			left := int(detectionMat.GetFloatAt(i, 3) * float32(img.Cols()))
 			top := int(detectionMat.GetFloatAt(i, 4) * float32(img.Rows()))
 			right := int(detectionMat.GetFloatAt(i, 5) * float32(img.Cols()))
 			bottom := int(detectionMat.GetFloatAt(i, 6) * float32(img.Rows()))
 
 			rect := image.Rect(left, top, right, bottom)
-			gocv.Rectangle(&img, rect, color.RGBA{21, 104, 100, 0}, 1)
-			gocv.PutText(&img, fmt.Sprintf("Confidence: %.2f", confidence), image.Pt(left, top-10),
-				gocv.FontHersheySimplex, 0.5, color.RGBA{255, 0, 0, 0}, 1)
+
+			if right-left > 50 && bottom-top > 50 {
+				gocv.Rectangle(&img, rect, color.RGBA{21, 104, 100, 0}, 1)
+				gocv.PutText(&img, fmt.Sprintf("Confidence: %.2f", confidence), image.Pt(left, top-10),
+					gocv.FontHersheySimplex, 0.5, color.RGBA{255, 0, 0, 0}, 1)
+			}
 		}
 	}
 
@@ -124,7 +125,6 @@ func GetFaceDescriptors(outputDir string) ([][]float32, error) {
 	}
 	defer rec.Close()
 
-	// Проходим по файлам в директории outputDir
 	err = filepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -134,16 +134,13 @@ func GetFaceDescriptors(outputDir string) ([][]float32, error) {
 			return nil
 		}
 
-		// Логируем имя файла, который обрабатывается
 		log.Printf("Обрабатываем файл: %s", path)
 
-		// Распознаем лица на изображении
 		faces, err := rec.RecognizeFile(path)
 		if err != nil {
 			return fmt.Errorf("не удалось распознать лица на изображении %s: %v", path, err)
 		}
 
-		// Извлекаем дескрипторы для каждого лица
 		for _, f := range faces {
 			descriptors = append(descriptors, f.Descriptor[:]) // Берем срез от Descriptor
 		}
@@ -158,13 +155,11 @@ func GetFaceDescriptors(outputDir string) ([][]float32, error) {
 	return descriptors, nil
 }
 
-// Косинусное сходство между двумя векторами
 func CosineSimilarity(a, b []float32) float32 {
 	var dotProduct float32
 	var normA float32
 	var normB float32
 
-	// Вычисляем скалярное произведение и нормы
 	for i := range a {
 		dotProduct += a[i] * b[i]
 		normA += a[i] * a[i]
@@ -186,7 +181,7 @@ func FindMatchingFaces(descriptor []float32, db db.Storage) ([]model.Face, error
 	var matchingFaces []model.Face
 	for _, face := range faces {
 		similarity := CosineSimilarity(descriptor, face.Descriptor)
-		if similarity > 0.8 {
+		if similarity > 0.9 {
 			matchingFaces = append(matchingFaces, face)
 		}
 	}
